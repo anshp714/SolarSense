@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SolarSense System Architecture & Flowcharts</title>
+    <!-- Include Mermaid JS from CDN to render the diagrams automatically -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #1e293b;
+            font-size: 2.5rem;
+            margin-bottom: 40px;
+        }
+        h2 {
+            color: #334155;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
+            margin-top: 50px;
+        }
+        .card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            padding: 30px;
+            margin-bottom: 40px;
+            overflow-x: auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .mermaid {
+            font-size: 1.1rem;
+        }
+        p {
+            color: #475569;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>☀️ SolarSense Flowcharts & Diagrams</h1>
+    <p style="text-align:center;">This document visualizes the exact flow of data through the SolarSense application. You can screenshot these diagrams to use directly in your presentation!</p>
+
+    <!-- DIAGRAM 1 -->
+    <h2>1. High-Level System Architecture</h2>
+    <p>This diagram shows how the user interacts with the UI, and how the UI communicates with the isolated backend logic.</p>
+    <div class="card">
+        <div class="mermaid">
+            graph TD
+                User([User / Planner]) -->|Interacts with| UI[Frontend: Streamlit App]
+                
+                subgraph Streamlit Frontend
+                    UI --> Home[Home / Landing Page]
+                    UI --> Analyze[Analyze Location UI]
+                    UI --> Dash[Dashboard UI]
+                end
+                
+                subgraph Python Backend Core
+                    Analyze -->|Sends Params| BP[backend/predictor.py]
+                    Dash -->|Requests Details| BM[backend/model.py]
+                    Dash -->|Requests Details| BD[backend/data_loader.py]
+                    
+                    BP -->|Uses| BE[backend/feature_engineering.py]
+                    BP -->|Loads Saved| ModelData[(Trained Model PKL)]
+                end
+                
+                BP -->|Returns Suitability| Analyze
+        </div>
+    </div>
+
+    <!-- DIAGRAM 2 -->
+    <h2>2. Model Training Pipeline</h2>
+    <p>This flowchart explains what happens behind the scenes when the dataset is generated or when the model is forced to retrain.</p>
+    <div class="card">
+        <div class="mermaid">
+            graph TD
+                Start([Start Training]) --> LoadData[backend/data_loader.py loads dataset.csv]
+                
+                LoadData --> Check{Is Data Valid?}
+                Check -->|No| Fail([Throw Error])
+                Check -->|Yes| Eng[backend/feature_engineering.py]
+                
+                Eng --> DeriveTemp[Derive Temperature]
+                Eng --> DeriveNDVI[Derive NDVI]
+                Eng --> DeriveMoist[Derive Soil Moisture]
+                
+                DeriveTemp --> Merge
+                DeriveNDVI --> Merge
+                DeriveMoist --> Merge
+                
+                Merge[Combine Base + Derived Features] --> Split[Split Data 80% Train / 20% Test]
+                
+                Split --> Train[Train Random Forest Classifier]
+                Train --> Evaluate[Calculate Accuracy, F1, ROC AUC]
+                
+                Evaluate --> Save[Save model.pkl and metrics.json]
+                Save --> End([End Training / Ready])
+        </div>
+    </div>
+
+    <!-- DIAGRAM 3 -->
+    <h2>3. Real-Time Prediction Execution Flow</h2>
+    <p>This sequence diagram details exactly what happens when a user clicks "Predict Land Suitability" in the app.</p>
+    <div class="card">
+        <div class="mermaid">
+            sequenceDiagram
+                participant User
+                participant Streamlit (app.py)
+                participant Predictor (backend)
+                participant FeatEng (feature_engineering)
+                participant Model (RandomForest)
+
+                User->>Streamlit: Adjusts Sliders & Clicks "Predict"
+                Streamlit->>Predictor: predict(elevation, slope, rainfall, soil)
+                
+                Predictor->>FeatEng: derive_single(elevation, rainfall, soil)
+                FeatEng-->>Predictor: Returns (Temp, NDVI, Moisture)
+                
+                Predictor->>Predictor: Formats into DataFrame
+                Predictor->>Model: model.predict_proba(DataFrame)
+                Model-->>Predictor: Returns Probabilities (e.g., 85% Suitable)
+                
+                Predictor->>Predictor: Generate Explanations (What passed/failed)
+                Predictor-->>Streamlit: Returns Result Dict (Status, Confidence, Explanations)
+                
+                Streamlit->>User: Renders Green/Red Banner & Cards
+        </div>
+    </div>
+
+    <!-- DIAGRAM 4 -->
+    <h2>4. Batch Processing Flow</h2>
+    <p>How the system handles predicting massive amounts of data at once via CSV upload.</p>
+    <div class="card">
+        <div class="mermaid">
+            graph LR
+                A([User Uploads CSV]) --> B[Streamlit parses to Pandas DF]
+                B --> C{Contains Required Columns?}
+                C -->|No| D([Return Column Error])
+                C -->|Yes| E[backend/predictor.batch_predict()]
+                E --> F[Apply Feature Engineering to all rows]
+                F --> G[Run Model Prediction over entire batch]
+                G --> H[Append 'Prediction' and 'Probability' columns]
+                H --> I([User Downloads Result CSV])
+        </div>
+    </div>
+
+    <script>
+        // Initialize mermaid to automatically render the diagrams
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>
